@@ -1,0 +1,4 @@
+title = "WorkWise AI automation secret scanning"
+
+[extend]
+useDefault = true
