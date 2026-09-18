@@ -5,6 +5,12 @@ import {
   completeInvoiceText,
 } from './workflows/document-extraction/fixtures.js';
 import { extractInvoice } from './workflows/document-extraction/extractor.js';
+import {
+  refundAnswerScript,
+  refundQuery,
+  sampleKnowledgeBase,
+} from './workflows/rag-lookup/fixtures.js';
+import { ragLookup } from './workflows/rag-lookup/rag.js';
 import { classifyTicket } from './workflows/ticket-classifier/classifier.js';
 import {
   billingClassificationScript,
@@ -37,10 +43,24 @@ async function runExtractionDemo(): Promise<void> {
   }
 }
 
+async function runRagDemo(): Promise<void> {
+  const provider = createMockProvider(refundAnswerScript);
+  const result = await ragLookup(provider, sampleKnowledgeBase, refundQuery);
+
+  console.log('\n--- RAG knowledge lookup ---');
+  console.log(`Question: ${refundQuery}`);
+  if (result.ok) {
+    console.log('Answer:', result.value);
+  } else {
+    console.log('Rejected:', result.error.message);
+  }
+}
+
 async function main(): Promise<void> {
   console.log(`WorkWise AI automation examples (provider: ${env.LLM_PROVIDER})`);
   await runClassifierDemo();
   await runExtractionDemo();
+  await runRagDemo();
 }
 
 await main();
