@@ -1,5 +1,6 @@
 import {
   InvalidModelOutputError,
+  ProviderFailureError,
   ProviderTimeoutError,
   type WorkflowError,
 } from '../../shared/errors.js';
@@ -21,6 +22,12 @@ export function createAlwaysTimingOutHandler(): (
   attempt: number,
 ) => Promise<Result<never, WorkflowError>> {
   return () => Promise.resolve(err(new ProviderTimeoutError('flaky-handler', 1000)));
+}
+
+export function createAlwaysFailingHandler(): (
+  attempt: number,
+) => Promise<Result<never, WorkflowError>> {
+  return () => Promise.resolve(err(new ProviderFailureError('flaky-handler', new Error('boom'))));
 }
 
 export function createInvalidOutputHandler(): (

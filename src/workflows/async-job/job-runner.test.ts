@@ -1,6 +1,7 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import {
+  createAlwaysFailingHandler,
   createAlwaysTimingOutHandler,
   createFlakyHandler,
   createInvalidOutputHandler,
@@ -58,6 +59,45 @@ describe('runJob', () => {
     expect(result.attempts).toBe(1);
     if (result.status === 'failed') {
       expect(result.error.code).toBe('INVALID_MODEL_OUTPUT');
+    }
+  });
+
+  it('fails immediately on a single-attempt timeout instead of escalating to manual_review', async () => {
+    const handler = createAlwaysTimingOutHandler();
+
+    const result = await runJob(handler, { maxAttempts: 1, baseDelayMs: 1, sleep: noopSleep });
+
+    expect(result.status).toBe('failed');
+    expect(result.attempts).toBe(1);
+    if (result.status === 'failed') {
+      expect(result.error.code).toBe('PROVIDER_TIMEOUT');
+    }
+  });
+
+  it('fails immediately on a single-attempt provider failure instead of escalating', async () => {
+    const handler = createAlwaysFailingHandler();
+
+    const result = await runJob(handler, { maxAttempts: 1, baseDelayMs: 1, sleep: noopSleep });
+
+    expect(result.status).toBe('failed');
+    expect(result.attempts).toBe(1);
+    if (result.status === 'failed') {
+      expect(result.error.code).toBe('PROVIDER_FAILURE');
+    }
+  });
+
+  it('waits between attempts using the real timer-based sleep when none is provided', async () => {
+    vi.useFakeTimers();
+    try {
+      const handler = createFlakyHandler(1, 'recovered');
+
+      const pending = runJob(handler, { maxAttempts: 2, baseDelayMs: 5 });
+      await vi.advanceTimersByTimeAsync(5);
+      const result = await pending;
+
+      expect(result.status).toBe('succeeded');
+    } finally {
+      vi.useRealTimers();
     }
   });
 });

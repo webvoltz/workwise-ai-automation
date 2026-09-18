@@ -57,6 +57,28 @@ describe('createMockProvider', () => {
     }
   });
 
+  it('defaults a scripted timeout to 10 seconds when none is given', async () => {
+    const provider = createMockProvider([{ type: 'timeout' }]);
+
+    const result = await provider.complete(noopRequest);
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.message).toContain('10000');
+    }
+  });
+
+  it('defaults a scripted failure message when none is given', async () => {
+    const provider = createMockProvider([{ type: 'failure' }]);
+
+    const result = await provider.complete(noopRequest);
+
+    expect(result.ok).toBe(false);
+    if (!result.ok && result.error.cause instanceof Error) {
+      expect(result.error.cause.message).toBe('mock provider failure');
+    }
+  });
+
   it('honors a custom provider name', () => {
     const provider = createMockProvider([{ type: 'text', text: 'hi' }], { name: 'custom-mock' });
 
