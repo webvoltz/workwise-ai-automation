@@ -11,6 +11,7 @@ import {
   sampleKnowledgeBase,
 } from './workflows/rag-lookup/fixtures.js';
 import { ragLookup } from './workflows/rag-lookup/rag.js';
+import { runJob } from './workflows/async-job/job-runner.js';
 import { classifyTicket } from './workflows/ticket-classifier/classifier.js';
 import {
   billingClassificationScript,
@@ -56,11 +57,32 @@ async function runRagDemo(): Promise<void> {
   }
 }
 
+async function runAsyncJobDemo(): Promise<void> {
+  const alwaysTimesOutProvider = createMockProvider([
+    { type: 'timeout', timeoutMs: 500 },
+    { type: 'timeout', timeoutMs: 500 },
+    { type: 'timeout', timeoutMs: 500 },
+  ]);
+
+  const job = await runJob(() => classifyTicket(alwaysTimesOutProvider, billingTicketText), {
+    maxAttempts: 3,
+    baseDelayMs: 10,
+  });
+
+  console.log('\n--- Async job with retry/failure state ---');
+  console.log(`Status: ${job.status} after ${String(job.attempts)} attempt(s)`);
+  console.log('Attempt log:', job.attemptLog);
+  if (job.status !== 'succeeded') {
+    console.log('Escalation reason:', job.error.message);
+  }
+}
+
 async function main(): Promise<void> {
   console.log(`WorkWise AI automation examples (provider: ${env.LLM_PROVIDER})`);
   await runClassifierDemo();
   await runExtractionDemo();
   await runRagDemo();
+  await runAsyncJobDemo();
 }
 
 await main();

@@ -43,7 +43,8 @@ export async function withRetry<T, E extends WorkflowError>(
   }
   /* v8 ignore stop */
 
-  if (!lastError.retryable) {
+  // maxAttempts of 1 never actually retried, so return the original error unwrapped.
+  if (!lastError.retryable || options.maxAttempts === 1) {
     return err(lastError);
   }
 

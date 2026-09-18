@@ -47,6 +47,16 @@ describe('withRetry', () => {
     expect(result.error.lastError).toBe(timeoutError);
   });
 
+  it('returns a retryable error unwrapped when maxAttempts is 1, since nothing was retried', async () => {
+    const timeoutError = new ProviderTimeoutError('mock', 10);
+    const operation = vi.fn().mockResolvedValue(err(timeoutError));
+
+    const result = await withRetry(operation, { maxAttempts: 1, baseDelayMs: 1, sleep: noopSleep });
+
+    expect(operation).toHaveBeenCalledTimes(1);
+    expect(result).toEqual(err(timeoutError));
+  });
+
   it('stops immediately on a non-retryable error without exhausting attempts', async () => {
     const validationError = new InvalidModelOutputError('classifier', ['bad output']);
     const operation = vi.fn().mockResolvedValue(err(validationError));
