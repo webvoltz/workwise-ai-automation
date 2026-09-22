@@ -144,14 +144,14 @@ the test file.
 
 ## Environment variables
 
-| Variable              | What it's for                                 | Default       |
-| --------------------- | --------------------------------------------- | ------------- |
-| `NODE_ENV`            | `development` \| `test` \| `production`       | `development` |
-| `LLM_PROVIDER`        | `mock` or `openai`                            | `mock`        |
-| `OPENAI_API_KEY`      | only needed if `LLM_PROVIDER=openai`          | -             |
-| `OPENAI_MODEL`        | model name for the OpenAI provider            | `gpt-4o-mini` |
-| `PROVIDER_TIMEOUT_MS` | how long before a call counts as a timeout    | `10000`       |
-| `MAX_RETRY_ATTEMPTS`  | attempts before a retryable failure escalates | `3`           |
+| Variable              | What it's for                                                                       | Default       |
+| --------------------- | ----------------------------------------------------------------------------------- | ------------- |
+| `NODE_ENV`            | `development` \| `test` \| `production`                                             | `development` |
+| `LLM_PROVIDER`        | `mock` or `openai`                                                                  | `mock`        |
+| `OPENAI_API_KEY`      | only needed if `LLM_PROVIDER=openai`                                                | -             |
+| `OPENAI_MODEL`        | model name for the OpenAI provider                                                  | `gpt-4o-mini` |
+| `PROVIDER_TIMEOUT_MS` | how long before a call counts as a timeout                                          | `10000`       |
+| `MAX_RETRY_ATTEMPTS`  | `runJob`'s default attempt count when the caller doesn't pass its own `maxAttempts` | `3`           |
 
 `env.ts` validates all of this with a Zod discriminated union, so `OPENAI_API_KEY` literally
 doesn't exist as a field unless `LLM_PROVIDER=openai` - a missing key fails at startup with one
@@ -225,15 +225,19 @@ goes through the scripted mock provider, so there's no network flakiness to chas
   short-circuit, and the real timer-based backoff (not just the injectable one).
 - `mock-provider.test.ts`, `openai-provider.test.ts`, `provider-factory.test.ts` - scripted
   responses in order, a scripted timeout/failure, an exhausted script, and the OpenAI provider's
-  error paths against a stubbed `fetch`.
+  error paths against a stubbed `fetch`, including which HTTP statuses come back retryable
+  (408/429/5xx, network errors) versus not (400/401/404, a malformed response shape).
 - `classifier.test.ts` - valid category/priority comes back typed; garbage JSON and an
   out-of-schema response both get rejected; a timeout gets retried and recovers.
 - `extractor.test.ts` - a complete invoice comes back `complete`; a partial one lists exactly
-  what's missing and comes back `needs_review`.
+  what's missing and comes back `needs_review`; a timeout gets retried and recovers, same as the
+  classifier.
 - `rag.test.ts`, `knowledge-base.test.ts` - a real citation comes through, a fake one gets dropped,
-  an all-fake response is rejected, and a query with no matches never even calls the provider.
+  an all-fake response is rejected, a query with no matches never even calls the provider, and a
+  timeout gets retried and recovers.
 - `job-runner.test.ts` - flaky handler recovers, exhausted retries land in `manual_review`, a
-  non-retryable error fails immediately.
+  non-retryable error fails immediately, and `maxAttempts` falls back to `MAX_RETRY_ATTEMPTS` from
+  the environment when the caller doesn't pass one (an explicit `maxAttempts` still wins).
 - `failure-modes.test.ts` - the cross-workflow stuff, like the classifier exhausting its own
   retries and the job runner wrapping a flaky classification end to end.
 
@@ -281,6 +285,21 @@ them up, the whole response gets rejected.
 **Why a scripted mock instead of recorded HTTP fixtures.** You can read the exact scenario for any
 test directly in the test file - `{ type: 'timeout' }` is about as readable as it gets - and
 scripting a failure case takes the same effort as scripting a success.
+
+**Retryable is a status-code decision, not a blanket flag.** `ProviderFailureError` used to be
+retryable unconditionally, which meant a permanent problem (bad API key, bad model name, a 400) got
+retried exactly like a network blip before failing - three wasted attempts and a slower failure for
+something retrying was never going to fix. The OpenAI provider now marks 408/429/5xx and network
+errors retryable, and 4xx/response-shape mismatches not, via an options bag on the error
+(`retryable` defaults to `true` for everything else, since most callers are the mock provider, where
+failures are already deterministic either way).
+
+**Retry is opt-in the same way on all three workflows.** `classifyTicket`, `extractInvoice`, and
+`ragLookup` all take the same `{ maxAttempts?, baseDelayMs? }` (a shared `WorkflowRetryOptions`
+type) and default to a single attempt - retrying is something a caller asks for, not something a
+workflow does on its own. `MAX_RETRY_ATTEMPTS` sits one level up from that: it's `runJob`'s default
+attempt count when a background job doesn't specify its own, so the env var you set is the one that
+actually changes behavior instead of just being validated and ignored.
 
 ## If something's not working
 
