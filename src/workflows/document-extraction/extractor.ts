@@ -2,6 +2,7 @@ import type { LlmProvider } from '../../providers/types.js';
 import { InvalidModelOutputError, type WorkflowError } from '../../shared/errors.js';
 import { parseJsonResponse } from '../../shared/parse-json.js';
 import { err, ok, type Result } from '../../shared/result.js';
+import { withRetry, type WorkflowRetryOptions } from '../../shared/retry.js';
 import {
   invoiceFieldsSchema,
   REQUIRED_INVOICE_FIELDS,
@@ -16,7 +17,20 @@ const SYSTEM_PROMPT =
   '"totalAmount":number|null,"dueDate":string|null}. Use null for anything the document does ' +
   'not state. Return JSON only, with no surrounding prose.';
 
+export type ExtractInvoiceOptions = WorkflowRetryOptions;
+
 export async function extractInvoice(
+  provider: LlmProvider,
+  documentText: string,
+  options: ExtractInvoiceOptions = {},
+): Promise<Result<DocumentExtractionResult, WorkflowError>> {
+  return withRetry(() => attemptExtraction(provider, documentText), {
+    maxAttempts: options.maxAttempts ?? 1,
+    baseDelayMs: options.baseDelayMs ?? 200,
+  });
+}
+
+async function attemptExtraction(
   provider: LlmProvider,
   documentText: string,
 ): Promise<Result<DocumentExtractionResult, WorkflowError>> {

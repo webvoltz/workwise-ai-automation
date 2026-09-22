@@ -96,17 +96,18 @@ stateDiagram-v2
 
 ## Failure modes
 
-| Scenario                                                       | Where it's caught      | What happens                                                 |
-| -------------------------------------------------------------- | ---------------------- | ------------------------------------------------------------ |
-| Provider call times out                                        | `ProviderTimeoutError` | retried, if attempts remain                                  |
-| Provider call fails some other way (network, non-2xx)          | `ProviderFailureError` | retried, if attempts remain                                  |
-| Response isn't valid JSON                                      | `parseJsonResponse`    | `InvalidModelOutputError`, not retried                       |
-| Response doesn't match the schema (bad enum, wrong shape, ...) | Zod `safeParse`        | `InvalidModelOutputError`, not retried                       |
-| RAG answer cites a document that wasn't retrieved              | `ragLookup`            | citation dropped; rejected outright if nothing legit is left |
-| Extracted document is missing a field                          | `extractInvoice`       | `status: "needs_review"` - this one isn't really a failure   |
-| Every retry attempt fails                                      | `withRetry`            | `RetryExhaustedError`                                        |
-| Job's retries run out                                          | `runJob`               | `status: "manual_review"`, attempt log intact                |
-| Job hits something non-retryable                               | `runJob`               | `status: "failed"` right away, no wasted attempts            |
+| Scenario                                                          | Where it's caught      | What happens                                                 |
+| ----------------------------------------------------------------- | ---------------------- | ------------------------------------------------------------ |
+| Provider call times out                                           | `ProviderTimeoutError` | retried, if attempts remain                                  |
+| Provider call fails transiently (network error, 408/429/5xx)      | `ProviderFailureError` | retried, if attempts remain                                  |
+| Provider call fails permanently (400/401/404, bad response shape) | `ProviderFailureError` | not retried - same request would just fail the same way      |
+| Response isn't valid JSON                                         | `parseJsonResponse`    | `InvalidModelOutputError`, not retried                       |
+| Response doesn't match the schema (bad enum, wrong shape, ...)    | Zod `safeParse`        | `InvalidModelOutputError`, not retried                       |
+| RAG answer cites a document that wasn't retrieved                 | `ragLookup`            | citation dropped; rejected outright if nothing legit is left |
+| Extracted document is missing a field                             | `extractInvoice`       | `status: "needs_review"` - this one isn't really a failure   |
+| Every retry attempt fails                                         | `withRetry`            | `RetryExhaustedError`                                        |
+| Job's retries run out                                             | `runJob`               | `status: "manual_review"`, attempt log intact                |
+| Job hits something non-retryable                                  | `runJob`               | `status: "failed"` right away, no wasted attempts            |
 
 Why `InvalidModelOutputError` doesn't get retried: everything here is deterministic (the mock
 always is), so replaying the same broken request just gets you the same broken response again.

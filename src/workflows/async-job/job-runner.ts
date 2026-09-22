@@ -1,10 +1,12 @@
+import { env } from '../../config/env.js';
 import type { WorkflowError } from '../../shared/errors.js';
 import type { Result } from '../../shared/result.js';
 import { withRetry } from '../../shared/retry.js';
 import type { JobAttemptRecord, JobResult } from './types.js';
 
 export interface RunJobOptions {
-  readonly maxAttempts: number;
+  // Falls back to MAX_RETRY_ATTEMPTS from the environment when omitted.
+  readonly maxAttempts?: number;
   readonly baseDelayMs: number;
   readonly sleep?: (delayMs: number) => Promise<void>;
 }
@@ -25,7 +27,7 @@ export async function runJob<T>(
   };
 
   const result = await withRetry(trackedHandler, {
-    maxAttempts: options.maxAttempts,
+    maxAttempts: options.maxAttempts ?? env.MAX_RETRY_ATTEMPTS,
     baseDelayMs: options.baseDelayMs,
     ...(options.sleep !== undefined ? { sleep: options.sleep } : {}),
   });

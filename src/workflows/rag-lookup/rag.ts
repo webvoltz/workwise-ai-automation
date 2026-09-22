@@ -4,6 +4,7 @@ import type { LlmProvider } from '../../providers/types.js';
 import { InvalidModelOutputError, type WorkflowError } from '../../shared/errors.js';
 import { parseJsonResponse } from '../../shared/parse-json.js';
 import { err, ok, type Result } from '../../shared/result.js';
+import { withRetry, type WorkflowRetryOptions } from '../../shared/retry.js';
 import { searchKnowledgeBase } from './knowledge-base.js';
 import type { Citation, KnowledgeDocument, RagAnswer } from './types.js';
 
@@ -14,7 +15,7 @@ const ragResponseSchema = z.object({
   citedDocumentIds: z.array(z.string().min(1)).min(1),
 });
 
-export interface RagLookupOptions {
+export interface RagLookupOptions extends WorkflowRetryOptions {
   readonly topK?: number;
 }
 
@@ -45,6 +46,17 @@ export async function ragLookup(
     );
   }
 
+  return withRetry(() => attemptRagLookup(provider, retrieved, query), {
+    maxAttempts: options.maxAttempts ?? 1,
+    baseDelayMs: options.baseDelayMs ?? 200,
+  });
+}
+
+async function attemptRagLookup(
+  provider: LlmProvider,
+  retrieved: readonly KnowledgeDocument[],
+  query: string,
+): Promise<Result<RagAnswer, WorkflowError>> {
   const completion = await provider.complete({
     system: buildSystemPrompt(retrieved),
     prompt: query,

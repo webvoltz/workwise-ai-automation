@@ -7,6 +7,13 @@ export interface RetryOptions {
   readonly sleep?: (delayMs: number) => Promise<void>;
 }
 
+// The subset of RetryOptions a workflow exposes to its caller: maxAttempts/baseDelayMs, both
+// optional so a single call (the default) doesn't require thinking about retry at all.
+export interface WorkflowRetryOptions {
+  readonly maxAttempts?: number;
+  readonly baseDelayMs?: number;
+}
+
 const defaultSleep = (delayMs: number): Promise<void> =>
   new Promise((resolve) => {
     setTimeout(resolve, delayMs);

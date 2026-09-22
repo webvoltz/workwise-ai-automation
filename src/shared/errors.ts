@@ -16,13 +16,20 @@ export class ProviderTimeoutError extends BaseWorkflowError {
   }
 }
 
+export interface ProviderFailureOptions {
+  // Most provider failures (network errors, 5xx, 429) are worth retrying. A permanent client
+  // error (bad request, bad API key, unknown model) is not: replaying it just fails the same way.
+  readonly retryable?: boolean;
+}
+
 export class ProviderFailureError extends BaseWorkflowError {
   readonly code = 'PROVIDER_FAILURE' as const;
-  readonly retryable = true;
+  readonly retryable: boolean;
 
-  constructor(providerName: string, cause: unknown) {
+  constructor(providerName: string, cause: unknown, options: ProviderFailureOptions = {}) {
     super(`${providerName} failed to produce a completion.`, { cause });
     this.name = 'ProviderFailureError';
+    this.retryable = options.retryable ?? true;
   }
 }
 

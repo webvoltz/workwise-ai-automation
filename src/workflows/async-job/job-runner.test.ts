@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
   createAlwaysFailingHandler,
@@ -11,6 +11,11 @@ import { runJob } from './job-runner.js';
 const noopSleep = (): Promise<void> => Promise.resolve();
 
 describe('runJob', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.resetModules();
+  });
+
   it('succeeds immediately when the handler succeeds on the first attempt', async () => {
     const handler = createFlakyHandler(0, 'done');
 
@@ -84,6 +89,34 @@ describe('runJob', () => {
     if (result.status === 'failed') {
       expect(result.error.code).toBe('PROVIDER_FAILURE');
     }
+  });
+
+  it('defaults maxAttempts to MAX_RETRY_ATTEMPTS from the environment when omitted', async () => {
+    vi.stubEnv('MAX_RETRY_ATTEMPTS', '2');
+    vi.resetModules();
+    const { runJob: runJobWithEnvDefault } = await import('./job-runner.js');
+    const handler = createAlwaysTimingOutHandler();
+
+    const result = await runJobWithEnvDefault(handler, { baseDelayMs: 1, sleep: noopSleep });
+
+    expect(result.status).toBe('manual_review');
+    expect(result.attempts).toBe(2);
+  });
+
+  it('an explicit maxAttempts overrides the MAX_RETRY_ATTEMPTS environment default', async () => {
+    vi.stubEnv('MAX_RETRY_ATTEMPTS', '5');
+    vi.resetModules();
+    const { runJob: runJobWithEnvDefault } = await import('./job-runner.js');
+    const handler = createAlwaysTimingOutHandler();
+
+    const result = await runJobWithEnvDefault(handler, {
+      maxAttempts: 1,
+      baseDelayMs: 1,
+      sleep: noopSleep,
+    });
+
+    expect(result.status).toBe('failed');
+    expect(result.attempts).toBe(1);
   });
 
   it('waits between attempts using the real timer-based sleep when none is provided', async () => {

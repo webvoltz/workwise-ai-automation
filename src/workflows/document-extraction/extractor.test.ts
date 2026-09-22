@@ -79,4 +79,18 @@ describe('extractInvoice', () => {
       expect(result.error.code).toBe('PROVIDER_TIMEOUT');
     }
   });
+
+  it('retries a provider timeout and succeeds once the provider recovers', async () => {
+    const provider = createMockProvider([...timedOutInvoiceScript, ...completeInvoiceScript]);
+
+    const result = await extractInvoice(provider, completeInvoiceText, {
+      maxAttempts: 2,
+      baseDelayMs: 1,
+    });
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.value.status).toBe('complete');
+    }
+  });
 });

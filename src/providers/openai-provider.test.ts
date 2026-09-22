@@ -34,19 +34,39 @@ describe('createOpenAiProvider', () => {
     expect(result).toEqual({ ok: true, value: { text: 'hello there', model: 'gpt-test' } });
   });
 
-  it('maps a non-2xx response to a ProviderFailureError', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(500, {})));
+  it.each([408, 429, 500, 503])(
+    'maps a %i response to a retryable ProviderFailureError',
+    async (status) => {
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(status, {})));
 
-    const provider = createOpenAiProvider(baseOptions);
-    const result = await provider.complete(request);
+      const provider = createOpenAiProvider(baseOptions);
+      const result = await provider.complete(request);
 
-    expect(result.ok).toBe(false);
-    if (!result.ok) {
-      expect(result.error.code).toBe('PROVIDER_FAILURE');
-    }
-  });
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.error.code).toBe('PROVIDER_FAILURE');
+        expect(result.error.retryable).toBe(true);
+      }
+    },
+  );
 
-  it('maps an unexpected response shape to a ProviderFailureError', async () => {
+  it.each([400, 401, 404])(
+    'maps a %i response to a non-retryable ProviderFailureError',
+    async (status) => {
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(status, {})));
+
+      const provider = createOpenAiProvider(baseOptions);
+      const result = await provider.complete(request);
+
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.error.code).toBe('PROVIDER_FAILURE');
+        expect(result.error.retryable).toBe(false);
+      }
+    },
+  );
+
+  it('maps an unexpected response shape to a non-retryable ProviderFailureError', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(200, { unexpected: true })));
 
     const provider = createOpenAiProvider(baseOptions);
@@ -55,6 +75,7 @@ describe('createOpenAiProvider', () => {
     expect(result.ok).toBe(false);
     if (!result.ok) {
       expect(result.error.code).toBe('PROVIDER_FAILURE');
+      expect(result.error.retryable).toBe(false);
     }
   });
 
@@ -81,7 +102,7 @@ describe('createOpenAiProvider', () => {
     }
   });
 
-  it('maps an unexpected network failure to a ProviderFailureError', async () => {
+  it('maps an unexpected network failure to a retryable ProviderFailureError', async () => {
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('network is down')));
 
     const provider = createOpenAiProvider(baseOptions);
@@ -90,6 +111,7 @@ describe('createOpenAiProvider', () => {
     expect(result.ok).toBe(false);
     if (!result.ok) {
       expect(result.error.code).toBe('PROVIDER_FAILURE');
+      expect(result.error.retryable).toBe(true);
     }
   });
 });

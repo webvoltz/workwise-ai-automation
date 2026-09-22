@@ -2,7 +2,7 @@ import type { LlmProvider } from '../../providers/types.js';
 import { InvalidModelOutputError, type WorkflowError } from '../../shared/errors.js';
 import { parseJsonResponse } from '../../shared/parse-json.js';
 import { err, ok, type Result } from '../../shared/result.js';
-import { withRetry } from '../../shared/retry.js';
+import { withRetry, type WorkflowRetryOptions } from '../../shared/retry.js';
 import { ticketClassificationSchema, type TicketClassification } from './schema.js';
 
 const WORKFLOW_NAME = 'support-ticket-classifier';
@@ -12,10 +12,7 @@ const SYSTEM_PROMPT =
   'matching {"category":"billing|technical|account|general","priority":"low|medium|high|urgent",' +
   '"confidence":0-1,"rationale":"..."}. Return JSON only, with no surrounding prose.';
 
-export interface ClassifyTicketOptions {
-  readonly maxAttempts?: number;
-  readonly baseDelayMs?: number;
-}
+export type ClassifyTicketOptions = WorkflowRetryOptions;
 
 export async function classifyTicket(
   provider: LlmProvider,

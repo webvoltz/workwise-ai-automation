@@ -95,4 +95,18 @@ describe('ragLookup', () => {
       expect(result.error.code).toBe('PROVIDER_TIMEOUT');
     }
   });
+
+  it('retries a provider timeout and succeeds once the provider recovers', async () => {
+    const provider = createMockProvider([...timedOutRagResponseScript, ...refundAnswerScript]);
+
+    const result = await ragLookup(provider, sampleKnowledgeBase, refundQuery, {
+      maxAttempts: 2,
+      baseDelayMs: 1,
+    });
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.value.citations).toEqual([{ id: 'kb-refunds', title: 'Refund policy' }]);
+    }
+  });
 });
